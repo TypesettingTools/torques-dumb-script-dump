@@ -665,7 +665,35 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <http://www.gnu.org/licenses/>.
 ]====]
 
+ffi = require "ffi"
+sleepDivisor = 1
+sleep = nil
+if ffi.os == "Windows"
+	ffi.cdef "void Sleep(unsigned long dwMilliseconds);"
+	sleepDivisor = 1000
+	sleep = ffi.C.Sleep
+else
+	ffi.cdef "int usleep(unsigned int useconds);"
+	sleep = ffi.C.usleep
+
+
+punishment = ( sleepTime = 100000 )->
+	aegisub.progress.title "You goofed."
+	aegisub.progress.task "Next time maybe don't do it wrong."
+	cancelAttempt = false
+	for x = 1, 100
+		aegisub.progress.set x
+		sleep sleepTime/sleepDivisor
+		if aegisub.progress.is_cancelled! and not cancelAttempt
+			aegisub.progress.task "Can't let you do that, Starfox."
+			cancelAttempt = true
+
+	aegisub.cancel!
+
 shift = ( sub, sel, act ) ->
+	if #sel < 2
+		punishment!
+
 	firstline = sub[sel[1]]
 	secondline = sub[sel[2]]
 	timediff = secondline.start_time - firstline.start_time
