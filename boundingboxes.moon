@@ -670,15 +670,17 @@ Inspector = require 'ASSInspector.Inspector'
 util      = require 'aegisub.util'
 
 insertStyle = ( subtitle ) ->
+	overwrite = false
 	seenStyles = false
 	lastStyleIndex = 0
 	for i = 1, #subtitle
 		with line = subtitle[i]
 			if 'style' == .class
 				seenStyles = true
-				if "boundingbox-display" == .name
-					return
 				lastStyleIndex = i
+				if "boundingbox-display" == .name
+					overwrite = true
+					break
 			elseif seenStyles
 				break
 
@@ -690,19 +692,31 @@ insertStyle = ( subtitle ) ->
 		.angle     = 0
 		.outline   = 0
 		.shadow    = 0
-		.color1    = "&H000000FF"
 
-		subtitle.insert lastStyleIndex + 1, newStyle
+		if overwrite
+			subtitle[lastStyleIndex] = newStyle
+		else
+			.color1  = "&H000000FF"
+			subtitle.insert lastStyleIndex + 1, newStyle
 
-drawBoundingBox = ( line, rect, time ) ->
-	newLine = util.copy line
-	newLine.extra = { }
-	newLine.style = "boundingbox-display"
-
-	with rect
-		newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
-
-	return newLine
+conjoinRects = ( rects, times, start, results ) ->
+	lastRect = rects[start]
+	for i = start + 1, #rects
+		rect = rects[i]
+		time = times[i]
+		unless rect
+			lastRect = { }
+			continue
+		if rect.x == lastRect.x and rect.y == lastRect.y and rect.w == lastRect.w and rect.h == lastRect.h
+			results[#results].end_time = time + 10
+		else
+			lastRect = rect
+			newLine = util.copy results[#results]
+			newLine.start_time = time
+			newLine.end_time   = time + 10
+			with rect
+				newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
+			table.insert results, newLine
 
 mainFunction = ( subtitle, selectedLines, activeLine ) ->
 	if 0 == #selectedLines
@@ -716,15 +730,32 @@ mainFunction = ( subtitle, selectedLines, activeLine ) ->
 	for i = count, 1, -1
 		lineIndex = selectedLines[i]
 		line = subtitle[lineIndex]
+		line.assi_exhaustive = true
 
-		boundingRects, times = myInspector\getBounds( { line } )
-		if nil == boundingRects
+		rects, times = myInspector\getBounds( { line } )
+		if nil == rects
 			error times
 
-		for i = 1, #boundingRects
-			rect = boundingRects[i]
-			if rect
-				subtitle.insert lineIndex, drawBoundingBox line, rect, times[i]
+		start = 1
+		while false == rects[start]
+			start += 1
+
+		if start > #rects
+			continue
+
+		results = { }
+		newLine = util.copy line
+		newLine.style = "boundingbox-display"
+		newLine.start_time = times[start]
+		newLine.end_time = times[start] + 10
+		with rects[start]
+			newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
+		table.insert results, newLine
+		conjoinRects rects, times, start, results
+
+		for i = #results, 1, -1
+			result = results[i]
+			subtitle.insert lineIndex, result
 
 		aegisub.progress.set 100*(count-i)/count
 
