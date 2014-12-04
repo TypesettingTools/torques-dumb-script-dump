@@ -1,8 +1,8 @@
-# Everything about this is bad
-
-### licence
-
-```python
+export script_name        = "Draw Bounding Boxes"
+export script_description = "Draws bounding rectangles for selected events."
+export script_author      = "torque"
+export script_version     = 0x000100
+export script_licence = [====[
 GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
 
@@ -664,20 +664,71 @@ specific requirements.
 if any, to sign a "copyright disclaimer" for the program, if necessary.
 For more information on this, and how to apply and follow the GNU AGPL, see
 <http://www.gnu.org/licenses/>.
-```
+]====]
 
-All of this stuff is probably done better by other things.
+Inspector = require 'ASSInspector.Inspector'
+util      = require 'aegisub.util'
 
-###### Shift subs
+insertStyle = ( subtitle ) ->
+	seenStyles = false
+	lastStyleIndex = 0
+	for i = 1, #subtitle
+		with line = subtitle[i]
+			if 'style' == .class
+				seenStyles = true
+				if "boundingbox-display" == .name
+					return
+				lastStyleIndex = i
+			elseif seenStyles
+				break
 
-Takes the difference between the start times of the first two selected
-lines and then shifts all the lines in the selection by that difference.
-The first selected line is deleted, under the assumption that it is
-either a duplicate or otherwise worthless.
+	with newStyle = util.copy subtitle[lastStyleIndex]
+		.name      = "boundingbox-display"
+		.align     = 7
+		.scale_x   = 100
+		.scale_y   = 100
+		.angle     = 0
+		.outline   = 0
+		.shadow    = 0
+		.color1    = "&H000000FF"
 
-Useful when hotkeyed.
+		subtitle.insert lastStyleIndex + 1, newStyle
 
-###### Draw Bounding Boxes
+drawBoundingBox = ( line, rect, time ) ->
+	newLine = util.copy line
+	newLine.extra = { }
+	newLine.style = "boundingbox-display"
 
-Uses ASSInspector to calculate and draw bounding boxes of the selected
-lines. Not useful unless you want to to imitate outline style 3.
+	with rect
+		newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
+
+	return newLine
+
+mainFunction = ( subtitle, selectedLines, activeLine ) ->
+	if 0 == #selectedLines
+		return
+
+	myInspector, message = Inspector subtitle
+	unless myInspector
+		error message
+
+	count = #selectedLines
+	for i = count, 1, -1
+		lineIndex = selectedLines[i]
+		line = subtitle[lineIndex]
+
+		boundingRects, times = myInspector\getBounds( { line } )
+		if nil == boundingRects
+			error times
+
+		for i = 1, #boundingRects
+			rect = boundingRects[i]
+			if rect
+				subtitle.insert lineIndex, drawBoundingBox line, rect, times[i]
+
+		aegisub.progress.set 100*(count-i)/count
+
+	insertStyle subtitle
+	return nil
+
+aegisub.register_macro( script_name, script_description, mainFunction )
