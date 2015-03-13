@@ -669,6 +669,9 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 Inspector = require 'ASSInspector.Inspector'
 util      = require 'aegisub.util'
 
+ffms = aegisub.frame_from_ms
+msff = aegisub.ms_from_frame
+
 insertStyle = ( subtitle ) ->
 	overwrite = false
 	seenStyles = false
@@ -685,13 +688,13 @@ insertStyle = ( subtitle ) ->
 				break
 
 	with newStyle = util.copy subtitle[lastStyleIndex]
-		.name      = "boundingbox-display"
-		.align     = 7
-		.scale_x   = 100
-		.scale_y   = 100
-		.angle     = 0
-		.outline   = 0
-		.shadow    = 0
+		.name    = "boundingbox-display"
+		.align   = 7
+		.scale_x = 100
+		.scale_y = 100
+		.angle   = 0
+		.outline = 0
+		.shadow  = 0
 
 		if overwrite
 			subtitle[lastStyleIndex] = newStyle
@@ -701,22 +704,29 @@ insertStyle = ( subtitle ) ->
 
 conjoinRects = ( rects, times, start, results ) ->
 	lastRect = rects[start]
+	lastLine = results[#results]
+	finish = start
 	for i = start + 1, #rects
 		rect = rects[i]
-		time = times[i]
-		unless rect
-			lastRect = { }
-			continue
-		if rect.x == lastRect.x and rect.y == lastRect.y and rect.w == lastRect.w and rect.h == lastRect.h
-			results[#results].end_time = time + 10
+		if rect
+			unless rect.x == lastRect.x and rect.y == lastRect.y and rect.w == lastRect.w and rect.h == lastRect.h
+				lastRect = rect
+				time = times[i]
+				if lastLine
+					lastLine.end_time = time
+				lastLine = util.copy results[#results]
+				lastLine.start_time = time
+				with rect
+					lastLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
+				table.insert results, lastLine
+			finish = i
 		else
-			lastRect = rect
-			newLine = util.copy results[#results]
-			newLine.start_time = time
-			newLine.end_time   = time + 10
-			with rect
-				newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
-			table.insert results, newLine
+			if lastLine
+				lastLine.end_time = times[i]
+			lastLine = false
+			lastRect = { }
+
+	return finish
 
 mainFunction = ( subtitle, selectedLines, activeLine ) ->
 	if 0 == #selectedLines
@@ -740,22 +750,20 @@ mainFunction = ( subtitle, selectedLines, activeLine ) ->
 		while false == rects[start]
 			start += 1
 
-		if start > #rects
-			continue
+		if start <= #rects
+			results = { }
+			newLine = util.copy line
+			newLine.style = "boundingbox-display"
+			newLine.start_time = line.start_time
+			with rects[start]
+				newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
+			table.insert results, newLine
+			finish = conjoinRects rects, times, start, results
+			results[#results].end_time = times[finish+1] or line.end_time
 
-		results = { }
-		newLine = util.copy line
-		newLine.style = "boundingbox-display"
-		newLine.start_time = times[start]
-		newLine.end_time = times[start] + 10
-		with rects[start]
-			newLine.text = ([[{\pos(0,0)\p1}m %d %d l %d %d %d %d %d %d]])\format .x, .y, .x + .w, .y, .x + .w, .y + .h, .x, .y + .h
-		table.insert results, newLine
-		conjoinRects rects, times, start, results
-
-		for i = #results, 1, -1
-			result = results[i]
-			subtitle.insert lineIndex, result
+			for i = #results, 1, -1
+				result = results[i]
+				subtitle.insert lineIndex, result
 
 		aegisub.progress.set 100*(count-i)/count
 
