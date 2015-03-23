@@ -666,7 +666,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <http://www.gnu.org/licenses/>.
 ]====]
 
-Inspector = require 'ASSInspector.Inspector'
+Inspector = require 'SubInspector.Inspector'
 util      = require 'aegisub.util'
 
 ffms = aegisub.frame_from_ms
