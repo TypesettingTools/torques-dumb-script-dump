@@ -1,7 +1,7 @@
 export script_name        = "Join Lines"
 export script_description = "Join Lines Joins Lines"
 export script_author      = "torque"
-export script_version     = 0x000100
+export script_version     = 0xABCDEF
 export script_licence = [====[
 GNU AFFERO GENERAL PUBLIC LICENSE
                        Version 3, 19 November 2007
@@ -704,24 +704,27 @@ joinlines = ( sub, sel, act ) ->
 
 	return if #sel < 2
 
-	combinedText = {}
+	combinedText = { }
 	firstLine = sub[sel[1]]
 	startTime = firstLine.start_time
 	endTime = firstLine.end_time
 	for i = #sel, 2, -1
 		lineIndex = sel[i]
 		line = sub[lineIndex]
-		table.insert combinedText, 1, '- ' .. line.text
-		if line.start_time < startTime
-			startTime = line.start_time
-		if line.end_time > endTime
-			endTime = line.end_time
+		table.insert combinedText, 1, '-' .. line.text
+    if line.start_time > 0 or line.end_time > 0
+  		if line.start_time < startTime
+  			startTime = line.start_time
+  		if line.end_time > endTime
+  			endTime = line.end_time
 		sub.delete lineIndex
 
-	table.insert combinedText, 1, '- ' .. firstLine.text
+	table.insert combinedText, 1, '-' .. firstLine.text
 	firstLine.start_time = startTime
 	firstLine.end_time = endTime
 	firstLine.text = table.concat combinedText, '\\N'
 	sub[sel[1]] = firstLine
+
+  return { sel[1] }
 
 aegisub.register_macro script_name, script_description, joinlines
